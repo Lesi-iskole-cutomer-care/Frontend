@@ -8,19 +8,40 @@ import {
   fetchAgents,
   deleteAgent,
   fetchAgentsPointsSummary,
+  // ✅ NEW
+  fetchPendingAgents,
+  approvePendingAgent,
+  rejectPendingAgent,
 } from "../api/features/agentSlice.js";
 
 const Agents = () => {
   const dispatch = useDispatch();
 
-  const { list, status, error, pointsList, pointsStatus, pointsError, pointsMonthKey } =
-    useSelector((state) => state.agents);
+  const {
+    list,
+    status,
+    error,
+    pointsList,
+    pointsStatus,
+    pointsError,
+    pointsMonthKey,
+
+    // ✅ NEW
+    pendingList,
+    pendingStatus,
+    pendingError,
+  } = useSelector((state) => state.agents);
 
   const agents = Array.isArray(list) ? list : [];
   const points = Array.isArray(pointsList) ? pointsList : [];
 
+  const pendingAgents = Array.isArray(pendingList) ? pendingList : [];
+
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [selectedAgent, setSelectedAgent] = useState(null);
+
+  // ✅ NEW pending modal
+  const [isPendingOpen, setIsPendingOpen] = useState(false);
 
   // Load agents + points on first render
   useEffect(() => {
@@ -81,6 +102,28 @@ const Agents = () => {
     handleCloseDelete();
   };
 
+  // ✅ Pending modal open + load pending
+  const handleOpenPending = async () => {
+    setIsPendingOpen(true);
+    dispatch(fetchPendingAgents());
+  };
+
+  const handleClosePending = () => setIsPendingOpen(false);
+
+  const handleApprove = async (agentId) => {
+    const res = await dispatch(approvePendingAgent(agentId));
+    if (!approvePendingAgent.fulfilled.match(res)) {
+      alert(res.payload || "Failed to approve");
+    }
+  };
+
+  const handleReject = async (agentId) => {
+    const res = await dispatch(rejectPendingAgent(agentId));
+    if (!rejectPendingAgent.fulfilled.match(res)) {
+      alert(res.payload || "Failed to reject");
+    }
+  };
+
   return (
     <div className="relative w-full">
       {/* Home icon */}
@@ -100,13 +143,29 @@ const Agents = () => {
         </svg>
       </Link>
 
+      {/* ✅ NEW: Pending Request button (below home icon) */}
+      <button
+        type="button"
+        onClick={handleOpenPending}
+        className="absolute -top-10 right-14 px-3 py-2 text-xs md:text-sm rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50"
+        title="Pending Requests"
+      >
+        Pending Requests
+        {pendingAgents.length > 0 && (
+          <span className="ml-2 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-red-600 text-white text-[10px]">
+            {pendingAgents.length}
+          </span>
+        )}
+      </button>
+
       {/* Card content */}
       <div className="bg-white rounded-2xl p-6 shadow mt-6">
         <div className="flex items-end justify-between gap-3 mb-4">
           <div>
             <h1 className="text-2xl font-bold text-[#1F31F9]">Agents</h1>
             <p className="text-xs text-gray-500 mt-1">
-              Points Month: <span className="font-semibold">{pointsMonthKey || "current"}</span>
+              Points Month:{" "}
+              <span className="font-semibold">{pointsMonthKey || "current"}</span>
             </p>
           </div>
 
@@ -148,7 +207,6 @@ const Agents = () => {
                   Role
                 </th>
 
-                {/* ✅ NEW columns */}
                 <th className="px-4 py-2 text-right text-sm font-semibold text-gray-700 border-r border-gray-400">
                   This Month Points
                 </th>
@@ -188,7 +246,8 @@ const Agents = () => {
                     <td className="px-4 py-2 text-sm text-gray-800 border-r border-gray-300 text-right">
                       {Number(agent.monthPoints || 0).toFixed(2)}
                       <div className="text-[10px] text-gray-500">
-                        {agent.monthTransitions || 0} informed • avg {agent.monthAvgMinutes || 0}m
+                        {agent.monthTransitions || 0} informed • avg{" "}
+                        {agent.monthAvgMinutes || 0}m
                       </div>
                     </td>
 
@@ -231,7 +290,7 @@ const Agents = () => {
         </div>
       </div>
 
-      {/* 🔹 Delete Confirmation Modal */}
+      {/* Delete Confirmation Modal */}
       {isDeleteOpen && selectedAgent && (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40">
           <div className="bg-white rounded-2xl shadow-lg w-full max-w-sm p-6">
@@ -278,6 +337,95 @@ const Agents = () => {
               >
                 Delete
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ✅ NEW: Pending Requests Modal */}
+      {isPendingOpen && (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40">
+          <div className="bg-white rounded-2xl shadow-lg w-full max-w-2xl p-6">
+            <div className="flex items-center justify-between gap-3 mb-4">
+              <div>
+                <h2 className="text-base font-semibold text-gray-900">
+                  Pending Requests
+                </h2>
+                <p className="text-xs text-gray-600 mt-0.5">
+                  Approve or reject agents waiting for admin approval.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => dispatch(fetchPendingAgents())}
+                  className="px-3 py-2 text-xs md:text-sm rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50"
+                >
+                  Refresh
+                </button>
+                <button
+                  type="button"
+                  onClick={handleClosePending}
+                  className="px-3 py-2 text-xs md:text-sm rounded-lg bg-gray-900 text-white hover:bg-gray-800"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+
+            {pendingStatus === "loading" && (
+              <p className="text-sm text-gray-500 mb-3">Loading pending agents...</p>
+            )}
+            {pendingError && (
+              <p className="text-sm text-red-500 mb-3">{pendingError}</p>
+            )}
+
+            <div className="max-h-[60vh] overflow-y-auto space-y-3 pr-1">
+              {pendingAgents.length > 0 ? (
+                pendingAgents.map((a) => (
+                  <div
+                    key={a._id || a.id}
+                    className="border border-gray-200 rounded-xl p-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3"
+                  >
+                    <div>
+                      <p className="text-sm font-semibold text-gray-900">{a.name}</p>
+                      <p className="text-xs text-gray-600 mt-0.5">
+                        Phone: <span className="font-medium">{a.phonenumber}</span>
+                      </p>
+                      <p className="text-xs text-gray-600 mt-0.5">
+                        Status:{" "}
+                        <span className="font-semibold text-orange-600">
+                          {a.approvalStatus || "pending"}
+                        </span>
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-2 justify-end">
+                      <button
+                        type="button"
+                        onClick={() => handleReject(a._id || a.id)}
+                        className="px-4 py-2 text-xs md:text-sm rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50"
+                      >
+                        Reject
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleApprove(a._id || a.id)}
+                        className="px-4 py-2 text-xs md:text-sm rounded-lg bg-blue-600 text-white font-semibold hover:bg-blue-700 transition"
+                      >
+                        Approve
+                      </button>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                pendingStatus === "succeeded" && (
+                  <div className="text-center text-sm text-gray-500 py-10">
+                    No pending requests.
+                  </div>
+                )
+              )}
             </div>
           </div>
         </div>

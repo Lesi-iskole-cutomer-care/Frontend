@@ -1,15 +1,12 @@
-// app/features/authSlice.js
+// src/api/features/authSlice.js
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
-import { apiPost } from "../api.js";  // ✅ keeping your import path
+import { apiPost, setStoredUser, clearStoredUser } from "../api.js";
 
-// 🔹 Adjust field names if backend is different
-// assumes backend expects: { phonenumber, password }
 export const signIn = createAsyncThunk(
   "auth/signIn",
   async (credentials, { rejectWithValue }) => {
     try {
       const data = await apiPost("/auth/signin", credentials);
-      // expected: { user, token }
       return data;
     } catch (err) {
       return rejectWithValue(err.message || "Signin failed");
@@ -20,7 +17,7 @@ export const signIn = createAsyncThunk(
 const initialState = {
   user: null,
   token: null,
-  status: "idle", // 'idle' | 'loading' | 'succeeded' | 'failed'
+  status: "idle",
   error: null,
 };
 
@@ -33,6 +30,8 @@ const authSlice = createSlice({
       state.token = null;
       state.status = "idle";
       state.error = null;
+      // ✅ clear user id
+      clearStoredUser();
     },
   },
   extraReducers: (builder) => {
@@ -45,6 +44,9 @@ const authSlice = createSlice({
         state.status = "succeeded";
         state.user = action.payload.user || null;
         state.token = action.payload.token || null;
+
+        // ✅ store user for x-user-id header
+        if (state.user) setStoredUser(state.user);
       })
       .addCase(signIn.rejected, (state, action) => {
         state.status = "failed";
